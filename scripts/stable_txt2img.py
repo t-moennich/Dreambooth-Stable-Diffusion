@@ -1,4 +1,7 @@
-import argparse, os, sys, glob
+import argparse
+import os
+import sys
+import glob
 import torch
 import numpy as np
 from omegaconf import OmegaConf
@@ -21,7 +24,8 @@ from transformers import AutoFeatureExtractor
 
 # load safety model
 safety_model_id = "CompVis/stable-diffusion-safety-checker"
-safety_feature_extractor = AutoFeatureExtractor.from_pretrained(safety_model_id)
+safety_feature_extractor = AutoFeatureExtractor.from_pretrained(
+    safety_model_id)
 safety_checker = StableDiffusionSafetyChecker.from_pretrained(safety_model_id)
 
 
@@ -65,7 +69,8 @@ def load_model_from_config(config, ckpt, verbose=False):
 def load_replacement(x):
     try:
         hwc = x.shape
-        y = Image.open("assets/rick.jpeg").convert("RGB").resize((hwc[1], hwc[0]))
+        y = Image.open(
+            "assets/rick.jpeg").convert("RGB").resize((hwc[1], hwc[0]))
         y = (np.array(y)/255.0).astype(x.dtype)
         assert y.shape == x.shape
         return y
@@ -73,19 +78,20 @@ def load_replacement(x):
         return x
 
 
-def check_safety(x_image):
-    safety_checker_input = safety_feature_extractor(numpy_to_pil(x_image), return_tensors="pt")
-    x_checked_image, has_nsfw_concept = safety_checker(images=x_image, clip_input=safety_checker_input.pixel_values)
+def is_not_safe_for_work_image(x_image):
+    safety_checker_input = safety_feature_extractor(
+        numpy_to_pil(x_image), return_tensors="pt")
+    x_checked_image, has_nsfw_concept = safety_checker(
+        images=x_image, clip_input=safety_checker_input.pixel_values)
     assert x_checked_image.shape[0] == len(has_nsfw_concept)
-    replaced_images = 0
+
+    nsfw_images_amount = 0
+    nsfw_images = []
     for i in range(len(has_nsfw_concept)):
         if has_nsfw_concept[i]:
-            x_checked_image[i] = load_replacement(x_checked_image[i])
-            replaced_images += 1
+            return True
 
-    print(f"Replaced {replaced_images} NSFW images")
-
-    return x_checked_image, has_nsfw_concept
+    return False
 
 
 def main():
@@ -221,7 +227,6 @@ def main():
         default="autocast"
     )
 
-
     parser.add_argument(
         "--embedding_path",
         type=str,
@@ -240,12 +245,12 @@ def main():
     else:
         seed_everything(opt.seed)
 
-
     config = OmegaConf.load(f"{opt.config}")
     model = load_model_from_config(config, f"{opt.ckpt}")
-    #model.embedding_manager.load(opt.embedding_path)
+    # model.embedding_manager.load(opt.embedding_path)
 
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    device = torch.device(
+        "cuda") if torch.cuda.is_available() else torch.device("cpu")
     model = model.to(device)
 
     if opt.plms:
@@ -276,22 +281,38 @@ def main():
 
     start_code = None
     if opt.fixed_code:
-        start_code = torch.randn([opt.n_samples, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
+        start_code = torch.randn(
+            [opt.n_samples, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
 
-    precision_scope = autocast if opt.precision=="autocast" else nullcontext
+    precision_scope = autocast if opt.precision == "autocast" else nullcontext
     with torch.no_grad():
         with precision_scope("cuda"):
             with model.ema_scope():
                 tic = time.time()
                 all_samples = list()
-                for n in trange(opt.n_iter, desc="Sampling"):
+
+                maxNotSafeForWorkTries = 10
+                imagesCreated = 0
+                loopIteration = 0
+
+                while imagesCreated < opt.n_iter:
+                    imageCreationSkipped = False
+
+                    print(f"Try create image {imagesCreated} of {opt.n_iter} ({loopIteration} times)")
+                    loopIteration += 1
+                    if loopIteration > maxNotSafeForWorkTries:
+                        print(f"Failed to create image {imagesCreated}, giving up")
+                        break
+
                     for prompts in tqdm(data, desc="data"):
                         uc = None
                         if opt.scale != 1.0:
-                            uc = model.get_learned_conditioning(batch_size * [""])
+                            uc = model.get_learned_conditioning(
+                                batch_size * [""])
                         if isinstance(prompts, tuple):
                             prompts = list(prompts)
                         c = model.get_learned_conditioning(prompts)
+
                         shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
                         samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
                                                          conditioning=c,
@@ -304,24 +325,38 @@ def main():
                                                          x_T=start_code)
 
                         x_samples_ddim = model.decode_first_stage(samples_ddim)
-                        x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
+                        x_samples_ddim = torch.clamp(
+                            (x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
                         x_samples_ddim = x_samples_ddim.cpu().permute(0, 2, 3, 1).numpy()
 
-                        x_checked_image, has_nsfw_concept = check_safety(x_samples_ddim)
-                        x_checked_image_torch = torch.from_numpy(x_checked_image).permute(0, 3, 1, 2)
+                        is_not_sfw = is_not_safe_for_work_image(x_samples_ddim)
+                        if is_not_sfw == True:
+                            print(f"Skip iteration because of NSFW")
+                            imageCreationSkipped = True
+                            break
+
+                        x_checked_image_torch = torch.from_numpy(x_samples_ddim).permute(0, 3, 1, 2)
 
                         used_seed = os.environ.get('PL_GLOBAL_SEED')
 
                         if not opt.skip_save:
                             for x_sample in x_checked_image_torch:
                                 x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
-                                img = Image.fromarray(x_sample.astype(np.uint8))
-                                img.save(os.path.join(outpath, f"{used_seed}_{base_count:05}.png"))
+                                img = Image.fromarray(
+                                    x_sample.astype(np.uint8))
+                                img.save(os.path.join(
+                                    outpath, f"{used_seed}_{base_count:05}.png"))
 
                                 base_count += 1
 
                         if not opt.skip_grid:
                             all_samples.append(x_checked_image_torch)
+
+                    # If image generation wa sskipped due NSFW check, try generating again
+                    if imageCreationSkipped == True:
+                        continue
+
+                    imagesCreated += 1
 
                 if not opt.skip_grid:
                     # additionally, save as grid
@@ -332,7 +367,8 @@ def main():
                     # to image
                     grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
                     img = Image.fromarray(grid.astype(np.uint8))
-                    img.save(os.path.join(outpath, f'grid-{grid_count:04}.png'))
+                    img.save(os.path.join(
+                        outpath, f'grid-{grid_count:04}.png'))
                     grid_count += 1
 
                 toc = time.time()
