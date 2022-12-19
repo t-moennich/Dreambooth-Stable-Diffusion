@@ -299,12 +299,13 @@ def main():
                     imageCreationSkipped = False
 
                     print(f"Try create image {imagesCreated} of {opt.n_iter} ({loopIteration} times)")
-                    loopIteration += 1
                     if loopIteration > maxNotSafeForWorkTries:
                         print(f"Failed to create image {imagesCreated}, giving up")
                         break
 
                     for prompts in tqdm(data, desc="data"):
+
+
                         uc = None
                         if opt.scale != 1.0:
                             uc = model.get_learned_conditioning(
@@ -333,6 +334,7 @@ def main():
                         if is_not_sfw == True:
                             print(f"Skip iteration because of NSFW")
                             imageCreationSkipped = True
+                            loopIteration += 1
                             break
 
                         x_checked_image_torch = torch.from_numpy(x_samples_ddim).permute(0, 3, 1, 2)
