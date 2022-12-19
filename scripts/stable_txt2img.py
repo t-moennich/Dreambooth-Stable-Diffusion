@@ -304,7 +304,9 @@ def main():
                         break
 
                     for prompts in tqdm(data, desc="data"):
-
+                        promptSplit = prompts.split(",")
+                        print(f"Prompt: {prompts}")
+                        print(f"  Split: {promptSplit} (len{len(promptSplit)})")
 
                         uc = None
                         if opt.scale != 1.0:
