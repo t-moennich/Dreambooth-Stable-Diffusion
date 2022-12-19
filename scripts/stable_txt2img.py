@@ -332,17 +332,21 @@ def main():
 
                         promptSplit = promptLine.split("######")
                         # Backwards compatible
-                        if len(promptSplit) < 3:
+                        if len(promptSplit) < 5:
                             print(f"Invalid prompt line definition, using defaults. {promptLine}")
 
                             promptId = "000"
                             promptSeed = None
+                            promptScale = opt.scale
+                            promptDdimSteps = opt.ddim_steps
                             promptString = promptLine
                         else:
                             print(f"Prompt: {promptSplit}")
                             promptId = promptSplit[0]
                             promptSeed = promptSplit[1]
-                            promptString = promptSplit[2]
+                            promptScale = int(promptSplit[2])
+                            promptDdimSteps = int(promptSplit[3])
+                            promptString = promptSplit[4]
 
                         if promptSeed is None or len(promptSeed) == 0:
                             print(f"Using random seed")
@@ -352,19 +356,18 @@ def main():
                             seed_all(int(promptSeed))
 
                         uc = None
-                        if opt.scale != 1.0:
-                            uc = model.get_learned_conditioning(
-                                batch_size * [""])
+                        if promptScale != 1.0:
+                            uc = model.get_learned_conditioning(batch_size * [""])
 
                         c = model.get_learned_conditioning([promptString])
 
                         shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
-                        samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
+                        samples_ddim, _ = sampler.sample(S=promptDdimSteps,
                                                          conditioning=c,
                                                          batch_size=opt.n_samples,
                                                          shape=shape,
                                                          verbose=False,
-                                                         unconditional_guidance_scale=opt.scale,
+                                                         unconditional_guidance_scale=promptScale,
                                                          unconditional_conditioning=uc,
                                                          eta=opt.ddim_eta,
                                                          x_T=start_code)
