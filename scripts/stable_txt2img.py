@@ -3,6 +3,7 @@ import os
 import sys
 import glob
 import torch
+import random
 import numpy as np
 from omegaconf import OmegaConf
 from PIL import Image
@@ -28,6 +29,15 @@ safety_feature_extractor = AutoFeatureExtractor.from_pretrained(
     safety_model_id)
 safety_checker = StableDiffusionSafetyChecker.from_pretrained(safety_model_id)
 
+# Taken from https://gist.github.com/ihoromi4/b681a9088f348942b01711f251e5f964
+def seed_everything(seed):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
 
 def chunk(it, size):
     it = iter(it)
@@ -309,15 +319,19 @@ def main():
 
                         print(f"Prompt: {prompts}")
 
-                        promptSplit = prompts.split("######")
-                        print(f"  Split: {promptSplit} (len{len(promptSplit)})")
+                        promptSplit = prompts[0].split("######")
+                        promptId = promptSplit[0]
+                        promptSeed = promptSplit[1]
+                        promptString = promptSplit[2]
+
+                        seed_everything(promptSeed)
 
                         uc = None
                         if opt.scale != 1.0:
                             uc = model.get_learned_conditioning(
                                 batch_size * [""])
 
-                        c = model.get_learned_conditioning(prompts)
+                        c = model.get_learned_conditioning([promptString])
 
                         shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
                         samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
@@ -352,7 +366,7 @@ def main():
                                 img = Image.fromarray(
                                     x_sample.astype(np.uint8))
                                 img.save(os.path.join(
-                                    outpath, f"{used_seed}_{base_count:05}.png"))
+                                    outpath, f"{promptId}_{used_seed}_{base_count:05}.png"))
 
                                 base_count += 1
 
