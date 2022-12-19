@@ -325,7 +325,16 @@ def main():
                         if isinstance(prompts, tuple):
                             prompts = list(prompts)
 
-                        promptSplit = prompts[0].split("######")
+                        promptLine = prompts[0]
+                        # Skip empty lines and comments
+                        if len(promptLine) == 0 or promptLine[0] == "#":
+                            continue
+
+                        promptSplit = promptLine.split("######")
+                        # This should not happen
+                        if len(promptSplit) == 0:
+                            print(f"Invalid prompt file line: {promptLine}")
+                            continue
 
                         print(f"Prompt: {promptSplit}")
                         promptId = promptSplit[0]
