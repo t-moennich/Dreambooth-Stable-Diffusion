@@ -335,7 +335,7 @@ def main():
                         if promptSeed is None or len(promptSeed) == 0:
                             seed_all()
                         else:
-                            seed_all(promptSeed)
+                            seed_all(int(promptSeed))
 
                         uc = None
                         if opt.scale != 1.0:
