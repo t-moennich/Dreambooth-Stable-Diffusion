@@ -342,8 +342,10 @@ def main():
                         promptString = promptSplit[2]
 
                         if promptSeed is None or len(promptSeed) == 0:
+                            print(f"Using random seed")
                             seed_all()
                         else:
+                            print(f"Using specific seed {promptSeed}")
                             seed_all(int(promptSeed))
 
                         uc = None
