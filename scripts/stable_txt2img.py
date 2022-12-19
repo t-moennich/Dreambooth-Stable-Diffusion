@@ -331,15 +331,18 @@ def main():
                             continue
 
                         promptSplit = promptLine.split("######")
-                        # This should not happen
-                        if len(promptSplit) == 0:
-                            print(f"Invalid prompt file line: {promptLine}")
-                            continue
+                        # Backwards compatible
+                        if len(promptSplit) < 3:
+                            print(f"Invalid prompt line, using defaults. {promptLine}")
 
-                        print(f"Prompt: {promptSplit}")
-                        promptId = promptSplit[0]
-                        promptSeed = promptSplit[1]
-                        promptString = promptSplit[2]
+                            promptId = "000"
+                            promptSeed = None
+                            promptString = promptLine
+                        else:
+                            print(f"Prompt: {promptSplit}")
+                            promptId = promptSplit[0]
+                            promptSeed = promptSplit[1]
+                            promptString = promptSplit[2]
 
                         if promptSeed is None or len(promptSeed) == 0:
                             print(f"Using random seed")
