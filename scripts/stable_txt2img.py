@@ -23,6 +23,9 @@ from ldm.models.diffusion.plms import PLMSSampler
 from diffusers.pipelines.stable_diffusion.safety_checker import StableDiffusionSafetyChecker
 from transformers import AutoFeatureExtractor
 
+min_seed_value = np.iinfo(np.uint32).min
+max_seed_value = np.iinfo(np.uint32).max
+
 # load safety model
 safety_model_id = "CompVis/stable-diffusion-safety-checker"
 safety_feature_extractor = AutoFeatureExtractor.from_pretrained(
@@ -30,14 +33,19 @@ safety_feature_extractor = AutoFeatureExtractor.from_pretrained(
 safety_checker = StableDiffusionSafetyChecker.from_pretrained(safety_model_id)
 
 # Taken from https://gist.github.com/ihoromi4/b681a9088f348942b01711f251e5f964
-def seed_everything(seed):
+def seed_all(seed = None):
+    if seed is None:
+        seed = random.randint(min_seed_value, max_seed_value)
+
+    seed_everything(seed, workers=True)
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.benchmark = False
+
 
 def chunk(it, size):
     it = iter(it)
@@ -324,7 +332,10 @@ def main():
                         promptSeed = promptSplit[1]
                         promptString = promptSplit[2]
 
-                        seed_everything(promptSeed)
+                        if promptSeed is None or len(promptSeed) == 0:
+                            seed_all()
+                        else:
+                            seed_all(promptSeed)
 
                         uc = None
                         if opt.scale != 1.0:
