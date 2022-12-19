@@ -325,9 +325,9 @@ def main():
                         if isinstance(prompts, tuple):
                             prompts = list(prompts)
 
-                        print(f"Prompt: {prompts}")
-
                         promptSplit = prompts[0].split("######")
+
+                        print(f"Prompt: {promptSplit}")
                         promptId = promptSplit[0]
                         promptSeed = promptSplit[1]
                         promptString = promptSplit[2]
