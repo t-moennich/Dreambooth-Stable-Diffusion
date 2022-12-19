@@ -304,16 +304,19 @@ def main():
                         break
 
                     for prompts in tqdm(data, desc="data"):
-                        promptSplit = prompts.split("######")
+                        if isinstance(prompts, tuple):
+                            prompts = list(prompts)
+
                         print(f"Prompt: {prompts}")
+
+                        promptSplit = prompts.split("######")
                         print(f"  Split: {promptSplit} (len{len(promptSplit)})")
 
                         uc = None
                         if opt.scale != 1.0:
                             uc = model.get_learned_conditioning(
                                 batch_size * [""])
-                        if isinstance(prompts, tuple):
-                            prompts = list(prompts)
+
                         c = model.get_learned_conditioning(prompts)
 
                         shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
