@@ -333,7 +333,7 @@ def main():
                         promptSplit = promptLine.split("######")
                         # Backwards compatible
                         if len(promptSplit) < 3:
-                            print(f"Invalid prompt line, using defaults. {promptLine}")
+                            print(f"Invalid prompt line definition, using defaults. {promptLine}")
 
                             promptId = "000"
                             promptSeed = None
