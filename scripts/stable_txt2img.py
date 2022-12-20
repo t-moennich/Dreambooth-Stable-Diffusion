@@ -309,50 +309,53 @@ def main():
                 tic = time.time()
                 all_samples = list()
 
-                maxNotSafeForWorkTries = 10
-                imagesCreated = 0
-                loopIteration = 0
+                for prompts in tqdm(data, desc="data"):
 
-                while imagesCreated < opt.n_iter:
-                    imageCreationSkipped = False
+                    if isinstance(prompts, tuple):
+                        prompts = list(prompts)
 
-                    print(f"Try create image {imagesCreated} of {opt.n_iter} ({loopIteration} times)")
-                    if loopIteration > maxNotSafeForWorkTries:
-                        print(f"Failed to create image {imagesCreated}, giving up")
-                        break
+                    promptLine = prompts[0]
+                    # Skip empty lines and comments
+                    if len(promptLine) == 0 or promptLine[0] == "#":
+                        continue
 
-                    for prompts in tqdm(data, desc="data"):
-                        if isinstance(prompts, tuple):
-                            prompts = list(prompts)
+                    promptSplit = promptLine.split("######")
+                    # Backwards compatible
+                    if len(promptSplit) < 5:
+                        print(f"Invalid prompt line definition, using defaults. {promptLine}")
 
-                        promptLine = prompts[0]
-                        # Skip empty lines and comments
-                        if len(promptLine) == 0 or promptLine[0] == "#":
-                            continue
-
-                        promptSplit = promptLine.split("######")
-                        # Backwards compatible
-                        if len(promptSplit) < 5:
-                            print(f"Invalid prompt line definition, using defaults. {promptLine}")
-
-                            promptId = "000"
-                            promptSeed = None
+                        promptId = "000"
+                        promptSeed = None
+                        promptScale = opt.scale
+                        promptDdimSteps = opt.ddim_steps
+                        promptString = promptLine
+                    else:
+                        print(f"Prompt: {promptSplit}")
+                        promptId = promptSplit[0]
+                        promptSeed = promptSplit[1]
+                        if promptSplit[2] is None or len(promptSplit[2]) == 0:
                             promptScale = opt.scale
-                            promptDdimSteps = opt.ddim_steps
-                            promptString = promptLine
                         else:
-                            print(f"Prompt: {promptSplit}")
-                            promptId = promptSplit[0]
-                            promptSeed = promptSplit[1]
-                            if promptSplit[2] is None or len(promptSplit[2]) == 0:
-                                promptScale = opt.scale
-                            else:
-                                promptScale = int(promptSplit[2])
-                            if promptSplit[2] is None or len(promptSplit[3]) == 0:
-                                promptDdimSteps = opt.ddim_steps
-                            else:
-                                promptDdimSteps = int(promptSplit[3])
-                            promptString = promptSplit[4]
+                            promptScale = int(promptSplit[2])
+                        if promptSplit[2] is None or len(promptSplit[3]) == 0:
+                            promptDdimSteps = opt.ddim_steps
+                        else:
+                            promptDdimSteps = int(promptSplit[3])
+                        promptString = promptSplit[4]
+
+
+                    maxNotSafeForWorkTries = 10
+                    imagesCreated = 0
+                    loopIteration = 0
+
+                    while imagesCreated < opt.n_iter:
+
+                        print(f"Try create image {imagesCreated} of {opt.n_iter} ({loopIteration} times)")
+                        if loopIteration > maxNotSafeForWorkTries:
+                            print(f"Failed to create image {loopIteration} times, giving up")
+                            # Just raise the counter without doing anything
+                            imagesCreated += 1
+                            continue
 
                         if promptSeed is None or len(promptSeed) == 0:
                             print(f"Using random seed")
@@ -385,10 +388,9 @@ def main():
 
                         is_not_sfw = is_not_safe_for_work_image(x_samples_ddim)
                         if is_not_sfw == True:
-                            print(f"Skip iteration because of NSFW")
-                            imageCreationSkipped = True
+                            print(f"Skip image because of NSFW")
                             loopIteration += 1
-                            break
+                            continue
 
                         x_checked_image_torch = torch.from_numpy(x_samples_ddim).permute(0, 3, 1, 2)
 
@@ -407,24 +409,20 @@ def main():
                         if not opt.skip_grid:
                             all_samples.append(x_checked_image_torch)
 
-                    # If image generation wa sskipped due NSFW check, try generating again
-                    if imageCreationSkipped == True:
-                        continue
+                        imagesCreated += 1
 
-                    imagesCreated += 1
+                    if not opt.skip_grid:
+                        # additionally, save as grid
+                        grid = torch.stack(all_samples, 0)
+                        grid = rearrange(grid, 'n b c h w -> (n b) c h w')
+                        grid = make_grid(grid, nrow=n_rows)
 
-                if not opt.skip_grid:
-                    # additionally, save as grid
-                    grid = torch.stack(all_samples, 0)
-                    grid = rearrange(grid, 'n b c h w -> (n b) c h w')
-                    grid = make_grid(grid, nrow=n_rows)
-
-                    # to image
-                    grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
-                    img = Image.fromarray(grid.astype(np.uint8))
-                    img.save(os.path.join(
-                        outpath, f'grid-{grid_count:04}.png'))
-                    grid_count += 1
+                        # to image
+                        grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
+                        img = Image.fromarray(grid.astype(np.uint8))
+                        img.save(os.path.join(
+                            outpath, f'grid-{grid_count:04}.png'))
+                        grid_count += 1
 
                 toc = time.time()
 
