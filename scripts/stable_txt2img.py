@@ -344,8 +344,14 @@ def main():
                             print(f"Prompt: {promptSplit}")
                             promptId = promptSplit[0]
                             promptSeed = promptSplit[1]
-                            promptScale = int(promptSplit[2])
-                            promptDdimSteps = int(promptSplit[3])
+                            if promptSplit[2] is None or len(promptSplit[2]) == 0:
+                                promptScale = opt.scale
+                            else:
+                                promptScale = int(promptSplit[2])
+                            if promptSplit[2] is None or len(promptSplit[3]) == 0:
+                                promptDdimSteps = opt.ddim_steps
+                            else:
+                                promptDdimSteps = int(promptSplit[3])
                             promptString = promptSplit[4]
 
                         if promptSeed is None or len(promptSeed) == 0:
